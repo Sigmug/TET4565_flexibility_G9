@@ -1,0 +1,6 @@
+--- Flex metrics ---
+N_EWH = 1
+Power capacity: 2.000 kW
+Service duration: 53 min (0.88 h)
+Energy capacity (signed): 0.267 kWh
+Energy capacity (absolute area): 3.267 kWh

@@ -1,0 +1,4 @@
+# pack-refs with: peeled fully-peeled sorted 
+01a036fa95cc295af499d315d756858f53427d9b refs/remotes/origin/extended_reference_grids
+23ca481acefa6ab49f21e7f5cdf0702c8c88d25c refs/remotes/origin/flexibility_course_NTNU_public
+5c461fed8e389777edd7d60e3fcf53367e1a3000 refs/remotes/origin/main
