@@ -28,7 +28,9 @@ import numpy as np
 
 # Location of (processed) data set for CINELDI MV reference system
 # (to be replaced by your own local data folder)
-path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
+
+#path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
+path_data_set         = 'C:\\Users\\graff\\OneDrive\\Dokumenter\\CINELDI_MV_reference_system_v_2023-03-06' 
 
 filename_load_data_fullpath = os.path.join(path_data_set,'load_data_CINELDI_MV_reference_system.csv')
 filename_load_mapping_fullpath = os.path.join(path_data_set,'mapping_loads_to_CINELDI_MV_reference_grid.csv')
@@ -184,6 +186,25 @@ plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
 #plt.savefig("Images/area_load_duration_curve.png", dpi=200)
-plt.show()
+#plt.show()
 
 ##testddddd
+#Task 6
+original_total_load = total_load_time_series.sum()
+original_peak_load = total_load_time_series.max()
+original_utilization_time = original_total_load / original_peak_load
+print('The total load: ', original_total_load, 'MWh')
+print('The peak load: ', original_peak_load, 'MW')
+print('Utilization time: ', original_utilization_time, 'h')
+
+original_peak_load_dict = {}
+for bus in load_profiles.columns:
+    original_peak_load_dict[bus] = load_profiles[bus].max()
+sum_peak_loads = sum(original_peak_load_dict.values())
+original_coincidence_factor = original_peak_load / sum_peak_loads
+print('Coincidence factor: ', original_coincidence_factor)
+
+
+#Task 7
+
+#Task 8

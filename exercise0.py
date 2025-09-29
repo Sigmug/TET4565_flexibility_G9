@@ -25,7 +25,9 @@ import math
 
 # Location of (processed) data set for CINELDI MV reference system
 # (to be replaced by your own local data folder)
-path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
+
+#path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
+path_data_set         = 'C:\\Users\\graff\\OneDrive\\Dokumenter\\CINELDI_MV_reference_system_v_2023-03-06' 
 
 filename_residential_fullpath = os.path.join(path_data_set,'time_series_IDs_primarily_residential.csv')
 filename_irregular_fullpath = os.path.join(path_data_set,'time_series_IDs_irregular.csv')      
