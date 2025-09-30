@@ -193,8 +193,8 @@ plt.tight_layout()
 original_total_load = total_load_time_series.sum()
 original_peak_load = total_load_time_series.max()
 original_utilization_time = original_total_load / original_peak_load
-print('The total load: ', original_total_load, 'MWh')
-print('The peak load: ', original_peak_load, 'MW')
+print('Total load: ', original_total_load, 'MWh')
+print('Peak load: ', original_peak_load, 'MW')
 print('Utilization time: ', original_utilization_time, 'h')
 
 original_peak_load_dict = {}
@@ -205,6 +205,44 @@ original_coincidence_factor = original_peak_load / sum_peak_loads
 print('Coincidence factor: ', original_coincidence_factor)
 
 
-#Task 7
+#Task 7 - se overleaf
 
 #Task 8
+
+#new demand or new customer
+new_load_profiles_vary = load_profiles.copy()
+new_load_profiles_vary['New customer'] = new_load_time_series
+
+new_total_load_time_series = new_load_profiles_vary.sum(axis=1)
+
+new_total_load_time_series_sorted = new_total_load_time_series.sort_values(ascending=False).reset_index(drop=True)
+
+
+plt.figure(figsize=(10,6))
+plt.plot(new_total_load_time_series_sorted)
+plt.title('Duration curve')
+plt.xlabel('Hours')
+plt.ylabel('Load demand [MW]')
+plt.grid(True)
+#plt.show()
+
+#Task 9
+new_peak_load = new_total_load_time_series.max()
+print('The new peak load is ', new_peak_load, ' MW')
+maximum_overloading = P_lim - new_peak_load
+print('The maximum overloading is ', maximum_overloading, ' MW')
+#print(new_load_time_series) -dette er bare for bus 90
+
+#Task 10
+hours_overloading = []
+for demand in new_total_load_time_series:
+    if demand > P_lim:
+        hours_overloading.append(demand)
+number_of_h_overloading = len(hours_overloading)
+print('The number of hours with overloading is ', number_of_h_overloading, 'h')
+
+#Task 13
+
+
+#Task 14
+
