@@ -29,8 +29,8 @@ import numpy as np
 # Location of (processed) data set for CINELDI MV reference system
 # (to be replaced by your own local data folder)
 
-#path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
-path_data_set         = 'C:\\Users\\graff\\OneDrive\\Dokumenter\\CINELDI_MV_reference_system_v_2023-03-06' 
+path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
+#path_data_set         = 'C:\\Users\\graff\\OneDrive\\Dokumenter\\CINELDI_MV_reference_system_v_2023-03-06' 
 
 filename_load_data_fullpath = os.path.join(path_data_set,'load_data_CINELDI_MV_reference_system.csv')
 filename_load_mapping_fullpath = os.path.join(path_data_set,'mapping_loads_to_CINELDI_MV_reference_grid.csv')
@@ -241,8 +241,210 @@ for demand in new_total_load_time_series:
 number_of_h_overloading = len(hours_overloading)
 print('The number of hours with overloading is ', number_of_h_overloading, 'h')
 
+
+
+
 #Task 13
+# --- Q13: LDC comparison for three cases ---
+
+def ldc(series):
+    """Return load duration curve (descending)."""
+    return np.sort(series.values)[::-1]
+
+def overlimit_hours(series, P_lim):
+    return int((series > P_lim).sum())
+
+def overlimit_energy(series, P_lim):
+    # MWh with 1-hour resolution
+    return float((series - P_lim).clip(lower=0.0).sum())
+
+def util_time(series):
+    # MWh / MW = h
+    return float(series.sum() / series.max())
+
+# (c) Existing loads only (Task 5)
+area_existing = total_load_time_series  # already computed in your code
+
+# (b) Time-dependent new load (Task 7)
+area_time_dep = new_total_load_time_series  # already computed in your code
+
+# (a) Constant new load: +0.4 MW every hour
+const_new = 0.4  # MW
+area_const = area_existing + const_new
+
+# Build LDCs
+ldc_existing = ldc(area_existing)
+ldc_time_dep = ldc(area_time_dep)
+ldc_const    = ldc(area_const)
+x_pct = np.linspace(0, 100, len(ldc_existing), endpoint=False)
+
+# Plot
+plt.figure(figsize=(10,5))
+plt.plot(x_pct, ldc_existing, linewidth=1.2, label="(c) Existing only")
+plt.plot(x_pct, ldc_time_dep, linewidth=1.2, label="(b) Time-dependent + new")
+plt.plot(x_pct, ldc_const,    linewidth=1.2, label="(a) Constant 0.4 MW + new")
+plt.axhline(P_lim, linestyle="--", label=f"P_lim = {P_lim:.3f} MW")
+plt.xlabel("Percentage of hours in the year [%]")
+plt.ylabel("Aggregated load [MW]")
+plt.title("Load duration curves: constant vs. time-dependent new load vs. existing only")
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
+#plt.show()
+
+# Key metrics table
+rows = []
+for name, series in [
+    ("(c) Existing only", area_existing),
+    ("(b) Time-dependent + new", area_time_dep),
+    ("(a) Constant 0.4 MW + new", area_const),
+]:
+    rows.append({
+        "Case": name,
+        "Peak [MW]": float(series.max()),
+        "Hours > P_lim [h]": overlimit_hours(series, P_lim),
+        "Over-limit energy [MWh]": overlimit_energy(series, P_lim),
+        "Utilization time [h]": util_time(series),
+        "Annual energy [MWh]": float(series.sum()),
+    })
+
+df_q13 = pd.DataFrame(rows, columns=[
+    "Case","Peak [MW]","Hours > P_lim [h]","Over-limit energy [MWh]",
+    "Utilization time [h]","Annual energy [MWh]"
+])
+print("\n[Q13] LDC comparison metrics:")
+print(df_q13.to_string(index=False))
 
 
 #Task 14
 
+# --- Q14: utilization time and coincidence factor (cases a–c) ---
+
+import os
+import pandas as pd
+import numpy as np
+
+# Helper metrics
+def utilization_time(series):
+    """MWh / MW = hours (hourly resolution)"""
+    return float(series.sum() / series.max())
+
+def coincidence_factor(area_series, per_bus_df):
+    """
+    CF = area peak / sum of individual peaks of contributing loads.
+    per_bus_df columns = each load (buses, and optionally 'New').
+    """
+    per_bus_peaks = per_bus_df.max(axis=0).sum()
+    return float(area_series.max() / per_bus_peaks)
+
+# (c) Existing loads only (Task 5)
+per_bus_existing = load_time_series_mapped.loc[:, bus_i_subset].copy()  # MW per bus
+area_existing = per_bus_existing.sum(axis=1)
+
+# (b) Time-dependent new load (Task 7)
+per_bus_time_dep = per_bus_existing.copy()
+per_bus_time_dep["New"] = new_load_time_series  # MW, time-dependent
+area_time_dep = per_bus_time_dep.sum(axis=1)
+
+# (a) Constant 0.4 MW new load (every hour)
+const_new_value = 0.4  # MW
+const_new_series = pd.Series(const_new_value, index=area_existing.index, name="New")
+per_bus_const = per_bus_existing.copy()
+per_bus_const["New"] = const_new_series
+area_const = per_bus_const.sum(axis=1)
+
+# Build summary table
+rows = []
+for name, area, per_bus in [
+    ("(a) Existing + constant 0.4 MW", area_const, per_bus_const),
+    ("(b) Existing + time-dependent",   area_time_dep, per_bus_time_dep),
+    ("(c) Existing only",               area_existing, per_bus_existing),
+]:
+    rows.append({
+        "Case": name,
+        "Peak [MW]": float(area.max()),
+        "Utilization time [h]": utilization_time(area),
+        "Coincidence factor [-]": coincidence_factor(area, per_bus),
+    })
+
+df_q14 = pd.DataFrame(rows, columns=[
+    "Case","Peak [MW]","Utilization time [h]","Coincidence factor [-]"
+])
+
+print("\n[Q14] Utilization time and coincidence factor:")
+print(df_q14.to_string(index=False))
+
+# Export a LaTeX table you can \input{} in the report
+os.makedirs("tables", exist_ok=True)
+latex_table = df_q14.to_latex(index=False, float_format="%.3f",
+                              column_format="lccc",
+                              caption="Utilization time and coincidence factor for cases (a)--(c).",
+                              label="tab:q14-util-cf")
+# Strip the outer table environment since we \input{} it inside a table in LaTeX
+begin = latex_table.find("\\begin{tabular}")
+end   = latex_table.find("\\end{tabular}") + len("\\end{tabular}")
+with open("tables/q14_util_cf.tex", "w") as f:
+    f.write(latex_table[begin:end])
+
+print("\n[Q14] LaTeX saved to: tables/q14_util_cf.tex")
+
+# --- Q14: Plott utnyttelsestid og coincidence factor ---
+
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Sjekk at df_q14 finnes; hvis ikke, gi en hjelpsom feilmelding
+if 'df_q14' not in globals():
+    raise RuntimeError("df_q14 mangler. Kjør først Q14-koden som beregner df_q14.")
+
+# Sørg for en konsistent rekkefølge (a), (b), (c)
+order = ["(a) Existing + constant 0.4 MW",
+         "(b) Existing + time-dependent",
+         "(c) Existing only"]
+df_plot = df_q14.set_index("Case").loc[order].reset_index()
+
+# Data
+cases = df_plot["Case"].tolist()
+util_time_vals = df_plot["Utilization time [h]"].values
+cf_vals = df_plot["Coincidence factor [-]"].values
+
+# Plot 1: Utnyttelsestid (h)
+plt.figure(figsize=(8,4))
+bars = plt.bar(cases, util_time_vals)
+for b, v in zip(bars, util_time_vals):
+    plt.text(b.get_x() + b.get_width()/2, b.get_height(), f"{v:.0f} h",
+             ha="center", va="bottom", fontsize=9)
+plt.ylabel("Utilization time [h]")
+plt.title("Utilization time for cases (a)–(c)")
+plt.xticks(rotation=10)
+plt.tight_layout()
+os.makedirs("figs", exist_ok=True)
+plt.savefig("figs/q14_util_time.pdf", bbox_inches="tight")
+# plt.savefig("figs/q14_util_time.png", dpi=300, bbox_inches="tight")
+# plt.show()
+
+# Plot 2: Coincidence factor (-)
+plt.figure(figsize=(8,4))
+bars = plt.bar(cases, cf_vals)
+for b, v in zip(bars, cf_vals):
+    plt.text(b.get_x() + b.get_width()/2, b.get_height(), f"{v:.3f}",
+             ha="center", va="bottom", fontsize=9)
+plt.ylabel("Coincidence factor [-]")
+plt.title("Coincidence factor for cases (a)–(c)")
+plt.xticks(rotation=10)
+plt.tight_layout()
+plt.savefig("figs/q14_coincidence_factor.pdf", bbox_inches="tight")
+plt.savefig("figs/q14_coincidence_factor.png", dpi=300, bbox_inches="tight")
+#plt.show()
+
+
+#Task 15 - se overleaf
+def pflex_cap(series, P_lim):
+    return float((series - P_lim).clip(lower=0.0).max())
+
+Pflex_a = pflex_cap(area_const, P_lim)      # Case (a): existing + constant 0.4 MW
+Pflex_b = pflex_cap(area_time_dep, P_lim)   # Case (b): existing + time-dependent
+
+print(f"[Q15] P_flex,cap (a): {Pflex_a:.3f} MW")
+print(f"[Q15] P_flex,cap (b): {Pflex_b:.3f} MW")
