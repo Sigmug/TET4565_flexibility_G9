@@ -89,7 +89,7 @@ def end_energy_rule(model):
 model.end_energy = pyo.Constraint(rule=end_energy_rule)
 
 def max_discharge_rule(model, t):
-    return model.P_d[t] <= model.E[t-1]*model.eta_d #Multiply with efficiency?
+    return model.P_d[t] <= model.E[t]*model.eta_d #Multiply with efficiency?
 model.max_discharge = pyo.Constraint(model.T, rule=max_discharge_rule) 
 
 def sell_buy_rule(model, t):
@@ -97,11 +97,11 @@ def sell_buy_rule(model, t):
 model.sell_buy = pyo.Constraint(model.T, rule=sell_buy_rule) #make sure we don't buy and sell at the same time
 
 def charge_limit_rule(model, t):
-    return 0 <= model.P_c[t] <= charging_power_limit
+    return model.P_c[t] <= charging_power_limit
 model.charge_limit = pyo.Constraint(model.T, rule=charge_limit_rule)
 
 def discharge_limit_rule(model, t):
-    return 0 <= model.P_d[t] <= discharging_power_limit
+    return model.P_d[t] <= discharging_power_limit
 model.discharge_limit = pyo.Constraint(model.T, rule=discharge_limit_rule)
 
 def battery_capacity_rule(model, t):
@@ -113,7 +113,7 @@ def to_grid_limit_rule(model, t):
 model.to_grid_limit = pyo.Constraint(model.T, rule=to_grid_limit_rule)
 
 #%% Solve the optimization problem
-opt = SolverFactory('gurobi') #you can also use 'glpk' or 'cbc' if you don't have Gurobi installed
+opt = SolverFactory('gurobi') #you can also use 'glpk'
 
 results = opt.solve(model, tee=True) #set tee=True if you want to see the solver output
 
