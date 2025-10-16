@@ -81,7 +81,7 @@ def energy_balance_rule(model, t):
     if t == model.T.first():
         return model.E[t] == 0 #battery state of charge zero at the beginning and the end of the day
     else:
-        return model.E[t] == model.E[t-1] + model.eta_c*model.P_c[t] - (1/model.eta_d)*model.P_d[t] #t-1 here??
+        return model.E[t] == model.E[t-1] + model.eta_c*model.P_c[t-1] - (1/model.eta_d)*model.P_d[t-1] #t-1 here??
 model.energy_balance = pyo.Constraint(model.T, rule=energy_balance_rule)
 
 def end_energy_rule(model):
@@ -117,7 +117,7 @@ opt = SolverFactory('gurobi') #you can also use 'glpk'
 
 results = opt.solve(model, tee=True) #set tee=True if you want to see the solver output
 
-# --- HENT RESULTATER ---------------------------------------------------
+# --- FETCH RESULTS ---------------------------------------------------
 df = pd.DataFrame({
     'hour'        : Hours,  # 0..23
     'price'       : [pyo.value(model.Price[t]) for t in model.T],
@@ -132,15 +132,15 @@ df = pd.DataFrame({
 })
 total_cost = (df['price'] * (df['P_from_grid'] - df['P_to_grid'])).sum()
 
-print(f"Total kostnad for døgnet: {total_cost:.2f} (i samme valuta/enhet som 'Price')")
+print(f"Total cost for the day: {total_cost:.2f} (same currency/unit as 'Price')")
 
-# --- PLOTT: lade-/utladeskjema + SoC ----------------------------------
+# --- PLOT: charge/discharge schedule + SoC ----------------------------------
 plt.figure(figsize=(10,4.2))
-plt.plot(df['hour'], df['P_c'], label='Lading P_c (kW)')
-plt.plot(df['hour'], df['P_d'], label='Utlading P_d (kW)')
+plt.plot(df['hour'], df['P_c'], label='Charging P_c (kW)')
+plt.plot(df['hour'], df['P_d'], label='Discharging P_d (kW)')
 plt.xlabel('Time')
-plt.ylabel('Effekt (kW)')
-plt.title('Batteriets lade-/utladeskjema (24h)')
+plt.ylabel('Power (kW)')
+plt.title('Battery charge/discharge schedule (24h)')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
@@ -148,11 +148,11 @@ plt.show()
 
 
 plt.figure(figsize=(10,4.2))
-plt.plot(df['hour'], df['P_from_grid'],  label='P_from_grid (kW)')
+plt.plot(df['hour'], df['P_from_grid'], label='P_from_grid (kW)')
 plt.plot(df['hour'], df['P_to_grid'], label='P_to_grid (kW)')
 plt.xlabel('Time')
-plt.ylabel('Effekt (kW)')
-plt.title('Batteriets lade-/utladeskjema (24h)')
+plt.ylabel('Power (kW)')
+plt.title('Battery charge/discharge schedule (24h)')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
@@ -161,32 +161,32 @@ plt.show()
 plt.figure(figsize=(10,4.2))
 plt.plot(df['hour'], df['E'],  label='SoC E (kWh)')
 plt.xlabel('Time')
-plt.ylabel('Energi (kWh)')
-plt.title('Batteriets energinivå (SoC) gjennom døgnet')
+plt.ylabel('Energy (kWh)')
+plt.title('Battery energy level (SoC) throughout the day')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
 plt.show()
 
-# --- PLOTT: lade-/utladeskjema + SoC (to akser) -----------------------------
+# --- PLOT: charge/discharge schedule + SoC (dual axes) -----------------------------
 fig, ax1 = plt.subplots(figsize=(10,4.2))
 
-# Venstre akse: effekt (kW)
-line_pc, = ax1.plot(df['hour'], df['P_c'], marker='o', linestyle='-', label='Lading P_c (kW)')
-line_pd, = ax1.plot(df['hour'], df['P_d'], marker='o', linestyle='-', label='Utlading P_d (kW)')
+# Left axis: power (kW)
+line_pc, = ax1.plot(df['hour'], df['P_c'], marker='o', linestyle='-', label='Charging P_c (kW)')
+line_pd, = ax1.plot(df['hour'], df['P_d'], marker='o', linestyle='-', label='Discharging P_d (kW)')
 ax1.set_xlabel('Time')
-ax1.set_ylabel('Effekt (kW)')
-ax1.set_title('Batteriets lade-/utladeskjema (24h) + SoC')
+ax1.set_ylabel('Power (kW)')
+ax1.set_title('Battery charge/discharge schedule (24h) + SoC')
 ax1.grid(True, alpha=0.3)
 ax1.set_xticks(df['hour'])
 
-# Høyre akse: SoC (kWh)
+# Right axis: SoC (kWh)
 ax2 = ax1.twinx()
 line_soc, = ax2.plot(df['hour'], df['E'], marker='o', linestyle='--', label='SoC (kWh)')
-ax2.set_ylabel('Energi (kWh)')
-ax2.set_ylim(0, max(1.0, df['E'].max()*1.05))  # liten luft på toppen
+ax2.set_ylabel('Energy (kWh)')
+ax2.set_ylim(0, max(1.0, df['E'].max()*1.05))  # small margin at the top
 
-# Felles legend
+# Shared legend
 lines = [line_pc, line_pd, line_soc]
 labels = [l.get_label() for l in lines]
 ax1.legend(lines, labels, loc='upper left')

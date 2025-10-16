@@ -205,7 +205,7 @@ original_coincidence_factor = original_peak_load / sum_peak_loads
 print('Coincidence factor: ', original_coincidence_factor)
 
 
-#Task 7 - se overleaf
+#Task 7 - see overleaf
 
 #Task 8
 
@@ -231,7 +231,7 @@ new_peak_load = new_total_load_time_series.max()
 print('The new peak load is ', new_peak_load, ' MW')
 maximum_overloading = P_lim - new_peak_load
 print('The maximum overloading is ', maximum_overloading, ' MW')
-#print(new_load_time_series) -dette er bare for bus 90
+#print(new_load_time_series) - this is only for bus 90
 
 #Task 10
 hours_overloading = []
@@ -388,17 +388,17 @@ with open("tables/q14_util_cf.tex", "w") as f:
 
 print("\n[Q14] LaTeX saved to: tables/q14_util_cf.tex")
 
-# --- Q14: Plott utnyttelsestid og coincidence factor ---
+# --- Q14: Plot utilization time and coincidence factor ---
 
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Sjekk at df_q14 finnes; hvis ikke, gi en hjelpsom feilmelding
+# Check that df_q14 exists; if not, raise a helpful error
 if 'df_q14' not in globals():
-    raise RuntimeError("df_q14 mangler. Kjør først Q14-koden som beregner df_q14.")
+    raise RuntimeError("df_q14 is missing. Run the Q14 code that computes df_q14 first.")
 
-# Sørg for en konsistent rekkefølge (a), (b), (c)
+# Ensure a consistent order (a), (b), (c)
 order = ["(a) Existing + constant 0.4 MW",
          "(b) Existing + time-dependent",
          "(c) Existing only"]
@@ -409,7 +409,7 @@ cases = df_plot["Case"].tolist()
 util_time_vals = df_plot["Utilization time [h]"].values
 cf_vals = df_plot["Coincidence factor [-]"].values
 
-# Plot 1: Utnyttelsestid (h)
+# Plot 1: Utilization time (h)
 plt.figure(figsize=(8,4))
 bars = plt.bar(cases, util_time_vals)
 for b, v in zip(bars, util_time_vals):
@@ -439,7 +439,7 @@ plt.savefig("figs/q14_coincidence_factor.png", dpi=300, bbox_inches="tight")
 #plt.show()
 
 
-#Task 15 - se overleaf
+#Task 15 - see overleaf
 def pflex_cap(series, P_lim):
     return float((series - P_lim).clip(lower=0.0).max())
 
