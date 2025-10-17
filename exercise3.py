@@ -152,7 +152,7 @@ plt.plot(df['hour'], df['P_from_grid'], label='P_from_grid (kW)')
 plt.plot(df['hour'], df['P_to_grid'], label='P_to_grid (kW)')
 plt.xlabel('Time')
 plt.ylabel('Power (kW)')
-plt.title('Battery charge/discharge schedule (24h)')
+plt.title('Load profile (24h)')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
@@ -182,14 +182,14 @@ ax1.set_xticks(df['hour'])
 
 # Right axis: SoC (kWh)
 ax2 = ax1.twinx()
-line_soc, = ax2.plot(df['hour'], df['E'], marker='o', linestyle='--', label='SoC (kWh)')
+line_soc, = ax2.plot(df['hour'], df['E'], marker='*', linestyle='--', label='SoC (kWh)', color='tab:green')
 ax2.set_ylabel('Energy (kWh)')
 ax2.set_ylim(0, max(1.0, df['E'].max()*1.05))  # small margin at the top
 
 # Shared legend
 lines = [line_pc, line_pd, line_soc]
 labels = [l.get_label() for l in lines]
-ax1.legend(lines, labels, loc='upper left')
+ax1.legend(lines, labels, loc='upper right')
 
 fig.tight_layout()
 plt.show()
