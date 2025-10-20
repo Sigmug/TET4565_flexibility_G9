@@ -41,6 +41,8 @@ Price = testData['Price'].values
 dict_Prices = dict(zip(Hours, Price))
 dict_Base_load = dict(zip(Hours, Base_load))
 dict_PV_prod = dict(zip(Hours, PV_prod))
+
+p_limit = 6.05
 # %%
 
 model = pyo.ConcreteModel()
@@ -57,12 +59,13 @@ model.cap = pyo.Param(initialize=capacity)
 model.eta_c = pyo.Param(initialize=charging_efficiency)
 model.eta_d = pyo.Param(initialize=discharging_efficiency)
 model.P_c_max = pyo.Param(initialize=charging_power_limit)
-model.P_d_max = pyo.Param(initialize=discharging_power_limit)   
+model.P_d_max = pyo.Param(initialize=discharging_power_limit)
+model.p_lim = pyo.Param(initialize = p_limit)   
 
 #Variables
 model.P_c =pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.P_c_max)) #Charging power
 model.P_d =pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.P_d_max)) #Discharging power
-model.P_from_grid = pyo.Var(model.T, within=pyo.NonNegativeReals) #Power bought from grid
+model.P_from_grid = pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.p_lim)) #Power bought from grid
 model.P_to_grid = pyo.Var(model.T, within=pyo.NonNegativeReals) #Power sold to grid
 model.E = pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.cap)) #Energy stored in battery 
 
@@ -112,6 +115,11 @@ def to_grid_limit_rule(model, t):
     return 0 <= model.P_to_grid[t]
 model.to_grid_limit = pyo.Constraint(model.T, rule=to_grid_limit_rule)
 
+"""
+def from_grid_limit_rule(model, t):
+    return model.P_from_grid[t] <= model.p_lim
+model.from_grid_limit = pyo.Constraint(model.T, rule=from_grid_limit_rule)
+"""
 #%% Solve the optimization problem
 opt = SolverFactory('gurobi') #you can also use 'glpk'
 
