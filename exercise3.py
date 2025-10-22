@@ -202,4 +202,35 @@ ax1.legend(lines, labels, loc='upper right')
 fig.tight_layout()
 plt.show()
 
-  
+# --- NET LOAD: compute, verify, and plot ------------------------------------
+# Net load seen by the grid (positive = importing from grid, negative = exporting to grid)
+df['net_load_grid'] = df['P_from_grid'] - df['P_to_grid']
+
+# Alternative expression via load, PV and battery (should be identical)
+df['net_load_alt'] = df['base_load'] - df['pv'] - df['P_d'] + df['P_c']
+
+# Plot net load over the day
+plt.figure(figsize=(10,4.2))
+plt.plot(df['hour'], df['net_load_grid'], marker='o', label='Net load (P_from_grid - P_to_grid)')
+plt.axhline(0, linewidth=1)
+plt.xlabel('Time (h)')
+plt.ylabel('Power (kW)')
+plt.title('Net load profile (positive: import, negative: export)')
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# --- Key figures -------------------------------------------------------------
+peak_import = df['net_load_grid'].max()
+t_peak_import = df.loc[df['net_load_grid'].idxmax(), 'hour']
+peak_export = df['net_load_grid'].min()  # most negative
+t_peak_export = df.loc[df['net_load_grid'].idxmin(), 'hour']
+energy_import = df['net_load_grid'].clip(lower=0).sum()  # kWh over the day (1h resolution)
+energy_export = (-df['net_load_grid']).clip(lower=0).sum()
+
+print(f"Peak import: {peak_import:.2f} kW at hour {int(t_peak_import)}")
+print(f"Peak export: {peak_export:.2f} kW at hour {int(t_peak_export)}")
+print(f"Energy imported (24h): {energy_import:.2f} kWh")
+print(f"Energy exported (24h): {energy_export:.2f} kWh")
+
