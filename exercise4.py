@@ -22,6 +22,7 @@ import numpy as np
 import seaborn as sns
 
 
+
 # %% Define input data
 
 # Location of (processed) data set for CINELDI MV reference system
@@ -86,3 +87,54 @@ load_time_series_subset = load_time_series_mapped[bus_i_subset] * scaling_factor
 load_time_series_subset_aggr = load_time_series_subset.sum(axis=1)
 
 P_max = load_time_series_subset_aggr.max()
+
+#TASK 2
+
+growth = 0.03     # 3% annual growth
+P_limit = 4.0     # MW
+years = 10        # or set any horizon you want
+
+# Peak each year (geometric growth from today's representative peak)
+peak_by_year = pd.Series(
+    [P_max * ((1 + growth) ** y) for y in range(years)],
+    index=pd.Index(range(1, years + 1), name='Year')
+)
+
+# Find the first year where the peak exceeds the 4 MW limit
+first_violation_year = peak_by_year[peak_by_year > P_limit].index.min()
+
+print(f"Current peak (year 1): {peak_by_year.iloc[0]:.3f} MW")
+print(f"Peak in year 2:        {peak_by_year.iloc[1]:.3f} MW")
+if pd.notna(first_violation_year):
+    print(f"Constraint (4 MW) is first violated in year {first_violation_year}.")
+else:
+    print("Constraint not violated within the chosen horizon.")
+
+# Quick plot
+# Step plot (piecewise-constant by year)
+plt.figure()
+
+# Extend one extra year on x so the last step is visible
+x = np.r_[peak_by_year.index, peak_by_year.index[-1] + 1]
+y = np.r_[peak_by_year.values, peak_by_year.values[-1]]
+
+plt.step(x, y, where='post', label='Annual peak (MW)')
+plt.axhline(P_limit, linestyle='--', label='Limit 4 MW')
+
+plt.title('Task 2: Annual peak with 3% growth (step)')
+plt.xlabel('Year')
+plt.ylabel('MW')
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
+#plt.show()
+
+#TASK 3
+
+cost_per_km = 759408 #NOK/km for FeAl 70
+length_km = 20.0
+
+capex_NOK = cost_per_km * length_km
+print(f"Task 3: Total investment = {capex_NOK:,.0f} NOK")
+
+#TASK 4
