@@ -147,22 +147,21 @@ PV_capex = capex_NOK / ((1 + r) ** years_to_discount)
 #print(f"Task 4: PV of investment (year {investment_year} start, 4%): {PV_capex:,.0f} NOK")
 
 #TASK 5
-analysis_horizon = 20
-economic_lifetime = 40
+y_end = 20
+T_life = 40
 
 
-asset_age_at_end = analysis_horizon #- 1
-remaining_fraction =  1 - asset_age_at_end / economic_lifetime
+y_end_cor = 20-1  # investment at start of year 2
+remaining_fraction =  1 - y_end_cor / T_life
 
 # Residual value and its PV
 residual_value = capex_NOK * remaining_fraction
-PV_residual = residual_value / ((1 + r) ** analysis_horizon)
+PV_residual = residual_value / ((1 + r) ** y_end)
 
 # Corrected PV
 PV_corrected = PV_capex - PV_residual
 
-print(f"Residual value (undiscounted, end of year {analysis_horizon}): {residual_value:,.0f} NOK")
-print(f"PV(investment): {PV_capex:,.0f} NOK")
+print(f"Residual value (undiscounted, end of year {y_end}): {residual_value:,.0f} NOK")
 print(f"PV(residual): {PV_residual:,.0f} NOK")
 print(f"Corrected PV (PV_inv - PV_res): {PV_corrected:,.0f} NOK")
 
@@ -173,11 +172,6 @@ limit_with_bess = 5.0  # 4 + 1 MW
 # smallest y with P_max*(1+g)^y > 5
 y_cross = int(np.ceil(np.log(limit_with_bess / P_max) / np.log(1 + growth)))
 #print(f"First year peak exceeds 5 MW: year {y_cross} -> reinforce at start of year {y_cross+1}")
-
-capex = 759_408 * 20.0   # 15,188,160 NOK
-r = 0.04
-analysis_horizon = 20
-lifetime = 40
 # Simple step plot: peak growth, 5 MW effective limit, and congestion year marker
 
 growth = 0.03           # 3% annual growth
@@ -215,31 +209,99 @@ capex = 759_408 * 20.0     # 15,188,160 NOK
 r = 0.04
 y_end = 20
 T_life = 40
+investment_year = 1
 
-# --- Baseline A: invest at start of year 2 (discount 1 year) ---
-PV_capex_A = capex / (1 + r)**1
-age_A = y_end - 1          # 19 years used by end of year 20
-residual_A = capex * (1 - age_A / T_life)
-PV_res_A = residual_A / (1 + r)**y_end
-PV_corr_A = PV_capex_A - PV_res_A
+c_inv_pv = capex_NOK / ((1 + r) ** 1)
+print("Task 6: Present value of grid investment:", c_inv_pv)
 
-# --- Alternative B: deferral; invest at start of year 10 (discount 9 years) ---
-PV_capex_B = capex / (1 + r)**9
-age_B = y_end - 9 - 0      # asset age from start of year 10 to end of year 20 = 11
-residual_B = capex * (1 - age_B / T_life)
-PV_res_B = residual_B / (1 + r)**y_end
-PV_corr_B = PV_capex_B - PV_res_B
+y_end_cor = 20-1  # investment at start of year 9
+remaining_fraction =  1 - y_end_cor / T_life
 
-PV_reduction = PV_corr_A - PV_corr_B
+# Residual value and its PV
+residual_value = capex_NOK * remaining_fraction
+PV_residual = residual_value / ((1 + r) ** y_end)
 
-#print(f"Corrected PV (A, invest start year 2): {PV_corr_A:,.2f} NOK")
-#print(f"Corrected PV (B, invest start year 10): {PV_corr_B:,.2f} NOK")
-#print(f"PV reduction due to deferral:          {PV_reduction:,.2f} NOK")
 
-#print(PV_corr_B)
-#print(PV_capex_B)
+print(f"PV(residual): {PV_residual:,.0f} NOK")
+PV_corrected = c_inv_pv - PV_residual
+print(f"Corrected PV (PV_inv - PV_res): {PV_corrected:,.0f} NOK")
+
 
 #TASK 7
 
+# ===== TASK 7 (enkel versjon) =====
+# Forutsetninger
+cost_per_mwh = 2000.0     # NOK/MWh
+days_per_year = 20        # antall "like" dager i året
+P_limit = 4.0             # MW (nettets grense)
+P_bess = 1.0              # MW (maks timesvis lastforskyvning fra batteriet)
+growth = 0.03             # årlig vekst
+planning_horizon = y_end  # f.eks. 20 år, gjenbruker variabel fra tidligere
 
+# 1) Finn når representativ topp (denne dagen) først går over 5 MW
+P_max_base = float(load_time_series_subset_aggr.max())      # MW på representativ dag (år 1)
+reinforce_year = None
+for y in range(1, planning_horizon + 1):
+    peak_y = P_max_base * ((1 + growth) ** (y - 1))
+    if peak_y > (P_limit + P_bess):   # overskrider 5 MW
+        reinforce_year = y      # forsterker ved starten av neste år
+        break
 
+# 2) Beregn årlige kostnader (0 etter forsterkning)
+annual_costs = {}
+for y in range(1, planning_horizon + 1):
+    # Hvis forsterket før eller ved starten av dette året -> ingen innkjøp
+    if (reinforce_year is not None) and (y >= reinforce_year):
+        annual_costs[y] = 0.0
+        continue
+
+    # Skaler hele døgnprofilen for dette året
+    growth_factor = (1 + growth) ** (y - 1)
+    load_y = load_time_series_subset_aggr * growth_factor  # MW per time
+
+    # Energi som må flyttes: overskudd over 4 MW, avgrenset av 1 MW batteri
+    excess = np.maximum(load_y - P_limit, 0.0)             # MW per time
+    shifted_per_hour = np.minimum(excess, P_bess)          # MW per time (cap 1 MW)
+    E_shift_day = float(shifted_per_hour.sum())            # MWh for hele dagen
+
+    # Årskostnad = MWh per dag * pris * antall slike dager
+    annual_costs[y] = E_shift_day * cost_per_mwh * days_per_year
+
+# 3) Utskrift (kort og ryddig)
+print("TASK 7: Yearly operating costs for congestion management (NOK/year)")
+if reinforce_year is None:
+    print("- No reinforcement in the horizon; services are purchased every year.")
+else:
+    print(f"- First year with peak > 5 MW: year {reinforce_year-1}.")
+    print(f"- Reinforcement at the start of year {reinforce_year} (no purchases from this year onwards).")
+
+for y in range(1, reinforce_year + 1):
+    print(f"Year {y:2d}: {annual_costs[y]:,.0f} NOK")
+
+#Task 8
+
+# ==== EENS for Alternative A ====
+
+# Inputs you already have
+length_km      = 20.0      # main feeder length
+P_avg_year1    = 1.841     # MW (average load in year 1)
+growth         = 0.03      # 3% annual growth
+planning_horizon = 10   # e.g., 20
+
+# --- Fill these two from your reliability table (permanent faults only) ---
+lambda_perm_per_km_year = 0.0397  # <-- set: faults per km per year (e.g., 0.05)
+repair_time_hours       = 3  # <-- set: hours per fault (e.g., 8.0)
+
+# Expected number of permanent faults per year on the main feeder
+faults_per_year = lambda_perm_per_km_year * length_km
+
+# EENS per year
+print("\nTASK 8: Expected Energy Not Supplied (EENS) per year (MWh)")
+eens = []
+for y in range(1, planning_horizon + 1):
+    P_avg_y = P_avg_year1 * ((1 + growth) ** (y - 1))   # MW
+    EENS_y  = P_avg_y * faults_per_year * repair_time_hours  # MWh/year
+    eens.append(EENS_y)
+    print(f"Year {y:2d}: EENS = {EENS_y:.2f} MWh")
+
+# Task 9
