@@ -27,6 +27,7 @@ import seaborn as sns
 
 # Location of (processed) data set for CINELDI MV reference system
 # (to be replaced by your own local data folder)
+
 path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
 #path_data_set         = 'C:\\Users\\graff\\OneDrive\\Dokumenter\\CINELDI_MV_reference_system_v_2023-03-06' 
 
@@ -304,4 +305,76 @@ for y in range(1, planning_horizon + 1):
     eens.append(EENS_y)
     print(f"Year {y:2d}: EENS = {EENS_y:.2f} MWh")
 
+print(data_load_point.columns)
 # Task 9
+# ==== TASK: Annual CENS for Alternative A (simple) ====
+# === Task 9: Annual CENS for Alternative A (super simple) ===
+
+# Inputs
+P_avg_year1 = 1.841          # MW (area average in year 1)
+growth = 0.03                # 3% annual growth
+years = 9
+length_km = 20.0
+lambda_perm_100km = 3.97     # faults per 100 km-year (permanent)
+r_hours = 3.0                # hours per permanent fault
+
+# Faults per year on the 20 km main feeder
+faults_per_year = lambda_perm_100km * (length_km / 100.0)   # = 0.794
+
+# --- Pick the specific cost column CLOSEST to 3h (set the exact name from your DataFrame) ---
+# e.g., if your table has columns like 'spec_cost_1h', 'spec_cost_4h', choose 'spec_cost_4h'
+cost_col = 'c_NOK_per_kWh_4h'    # <-- change to your actual column name
+
+# --- Compute weighted-average specific cost (NOK/kWh) for the area once ---
+base_bus_mw = net.load.loc[bus_i_subset, 'p_mw'] * scaling_factor
+bus_weights = base_bus_mw / base_bus_mw.sum()               # weights sum to 1
+spec_cost_bus = data_load_point.loc[bus_i_subset, cost_col].astype(float)
+avg_spec_cost = float((spec_cost_bus * bus_weights).sum())  # NOK/kWh
+
+# --- Loop years: ENS (MWh) -> CENS (NOK) ---
+for y in range(0, years + 1):
+    P_avg_y = P_avg_year1 * ((1 + growth) ** (y))       # MW
+    ENS_y_MWh = P_avg_y * r_hours * faults_per_year         # MWh/year
+    CENS_y_NOK = ENS_y_MWh * 1000.0 * avg_spec_cost         # NOK/year
+    print(f"Year {y:2d}: CENS = {CENS_y_NOK:,.0f} NOK")
+
+# Task 10    
+# === CENS for Alternative B (battery 2 MWh, always full) ===
+
+# Inputs (edit if needed)
+P_avg0 = 1.841            # MW, average load in year 0
+growth = 0.03             # 3% annual growth
+years = 10                # prints Year 0..9
+length_km = 20.0          # main feeder length
+lambda_perm_100km = 3.97  # permanent faults per 100 km-year (Overhead line 1–22 kV)
+r_hours = 3.0             # hours per fault
+E_B = 2.0                 # MWh, battery energy per outage (usable)
+
+# Faults per year for the 20 km feeder
+faults_per_year = lambda_perm_100km * (length_km / 100.0)   # = 0.794
+
+# ---- Pick specific cost column (closest to 3 h). Set the actual column name here:
+# e.g., 'spec_cost_4h' (NOK/kWh). If unsure, print(data_load_point.columns) and choose.
+cost_col = 'c_NOK_per_kWh_4h'  # <-- change to your actual column name
+
+# Weighted-average specific interruption cost for the area (NOK/kWh)
+base_bus_mw = net.load.loc[bus_i_subset, 'p_mw'] * scaling_factor
+weights = base_bus_mw / base_bus_mw.sum()
+spec_cost_bus = data_load_point.loc[bus_i_subset, cost_col].astype(float)
+avg_spec_cost = float((spec_cost_bus * weights).sum())  # NOK/kWh
+
+# Constant cost reduction per year due to the battery (same each year)
+# ΔCENS = (faults_per_year * E_B [MWh/outage] * 1000 kWh/MWh) * avg_spec_cost
+delta_cens = faults_per_year * E_B * 1000.0 * avg_spec_cost
+
+# Print results
+print(f"Using specific cost column: {cost_col}")
+print(f"faults/year = {faults_per_year:.3f}, outage duration = {r_hours:.1f} h, battery = {E_B:.1f} MWh")
+print(f"Constant annual reduction from battery: {delta_cens:,.0f} NOK\n")
+
+for y in range(years):
+    P_avg_y = P_avg0 * ((1 + growth) ** y)                 # MW
+    # EENS with battery: λ * max(P*r - E_B, 0) [MWh/yr]
+    eens_B_MWh = faults_per_year * max(P_avg_y * r_hours - E_B, 0.0)
+    cens_B_NOK = eens_B_MWh * 1000.0 * avg_spec_cost
+    print(f"Year {y:2d}: CENS(B) = {cens_B_NOK:,.0f} NOK")
