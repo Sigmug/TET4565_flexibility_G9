@@ -193,19 +193,19 @@ elif N_EWH > 1:
     plt.show()
 
 #Task 3: Plotting flexibility activated:
-# %% Aktivert fleksibilitet: enkel versjon
+# %% Activated flexibility: simple version
 if (t_act is None) or (S_act is None):
-    print("Fleksibilitet er ikke aktivert (t_act eller S_act er None).")
+    print("Flexibility not activated (t_act or S_act set to None).")
 else:
 
-    # Baseline vs. med fleks (bruk aggregert hvis N_EWH>1)
+    # Baseline vs. with flexibility (use aggregated data if N_EWH>1)
     P_base = np.array(P_list_base_all if N_EWH > 1 else P_list_base)
     P_flex = np.array(P_list_all      if N_EWH > 1 else P_list)
 
-    # ΔP(t) i kW
+    # ΔP(t) in kW
     dP = P_base - P_flex
 
-    # Plott
+    # Plot
     plt.figure()
     plt.plot(dP, label='ΔP')
     plt.axhline(0, color='k', linewidth=1)
@@ -216,9 +216,9 @@ else:
     plt.legend(); plt.tight_layout()
     plt.show()
 
-    # (Valgfritt) 1-linjers metrikker
+    # (Optional) single-line metrics
     P_cap = float(np.max(np.abs(dP)))
-    service_duration_min = int(np.max(np.diff(np.where(np.r_[0, dP!=0, 0])[0]) - 1))  # lengste sammenhengende ≠0
+    service_duration_min = int(np.max(np.diff(np.where(np.r_[0, dP!=0, 0])[0]) - 1))  # longest consecutive non-zero segment
     E_signed_kWh = float(dP.sum()/60.0)
     E_abs_kWh    = float(np.abs(dP).sum()/60.0)
     print(f"Power cap: {P_cap:.3f} kW | Duration: {service_duration_min} min | "

@@ -22,8 +22,8 @@ import time
 import os
 import numpy as np
 import pandas as pd
-import load_profiles as lp           # <- følger med oppgavesettet
-import pandapower_read_csv as ppcsv  # <- følger med oppgavesettet
+import load_profiles as lp           # <- provided with the exercise package
+import pandapower_read_csv as ppcsv  # <- provided with the exercise package
 
 
 path_data_set = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
@@ -35,54 +35,54 @@ filename_standard_overhead     = os.path.join(path_data_set,'standard_overhead_l
 filename_reldata               = os.path.join(path_data_set,'reldata_for_component_types.csv')
 filename_load_point            = os.path.join(path_data_set,'CINELDI_MV_reference_system_load_point.csv')
 
-# Valg for området og skalering
+# Choices for the area and scaling
 bus_i_subset    = [90, 91, 92, 96]
-scaling_factor  = 10          # som i Exercise 4
+scaling_factor  = 10          # same as in Exercise 4
 annual_growth   = 0.03
-year_index      = 5           # år 6 => y = 5
+year_index      = 5           # year 6 => y = 5
 scale_y6        = (1 + annual_growth)**year_index
 
-# Nettgrense i MW (brukes senere i modellen)
+# Grid limit in MW (used later in the model)
 P_lim_MW = 4.0
 
-# ================== LES STATISKE TABELLER (valgfritt, brukes i senere tasker) ==================
+# ================== READ STATIC TABLES (optional, used in later tasks) ==================
 data_standard_overhead_lines = pd.read_csv(filename_standard_overhead, delimiter=';').set_index('type')
 data_comp_rel                = pd.read_csv(filename_reldata, delimiter=';').set_index('main_type')
 data_load_point              = pd.read_csv(filename_load_point, delimiter=';').set_index('bus_i')
 
-# ================== LES NETT (pandapower) ==================
+# ================== READ NETWORK (pandapower) ==================
 net = ppcsv.read_net_from_csv(path_data_set, baseMVA=10)
 
-# ================== LES OG MAPPE LASTPROFILER ==================
-# 28. februar = dag nr. 59 i året -> 31 (jan) + 28 (feb) = 59 => 0-indeksert timeindeks i filene håndteres av hjelpefunksjonen
+# ================== READ AND MAP LOAD PROFILES ==================
+# 28 February = day no. 59 of the year -> 31 (Jan) + 28 (Feb) = 59 => the helper function handles the zero-indexed hourly index
 load_profiles = lp.load_profiles(filename_load_data_fullpath)
 
-# Bruk kun 28. feb som representativ dag
+# Use only 28 Feb as the representative day
 repr_days = [31 + 28]  # [59]
 profiles_mapped = load_profiles.map_rel_load_profiles(filename_load_mapping_fullpath, repr_days)
-# profiles_mapped: rader = døgnets timer (24), kolonner = busser (1-indeksert)
+# profiles_mapped: rows = hours of the day (24), columns = buses (1-indexed)
 
-# Skaler med nominell MW for hver last i nettdata + øk med scaling_factor (Exercise 4)
+# Scale by the nominal MW for each load in the grid data + increase with scaling_factor (Exercise 4)
 load_time_series_mapped = profiles_mapped.mul(net.load['p_mw'])    # MW
 load_time_series_subset = load_time_series_mapped[bus_i_subset] * scaling_factor
 
-# Aggregert timeserie (MW) for området
-load_time_series_subset_aggr = load_time_series_subset.sum(axis=1)  # lengde 24
+# Aggregated time series (MW) for the area
+load_time_series_subset_aggr = load_time_series_subset.sum(axis=1)  # length 24
 
 scale_y6 = (1.03**5)
 
-# ================== BYGG INNDATA TIL OPTIMISERING ==================
-# Base_load i MW for år 6 (y=5)
+# ================== BUILD INPUT DATA FOR OPTIMIZATION ==================
+# Base_load in MW for year 6 (y=5)
 Base_load_MW = load_time_series_subset_aggr.to_numpy() * scale_y6   # (24,)
 
-# PV-produksjon settes til null (MW)
+# PV production set to zero (MW)
 PV_prod_MW = np.zeros_like(Base_load_MW)
 
 # Timer 0..23
 Hours = np.arange(Base_load_MW.shape[0])
 
-# ===== PRIS =====
-# Prøv å lese prisfil hvis du har den; ellers bruk flat pris (1000 NOK/MWh) for å komme i gang
+# ===== PRICE =====
+# Try to read a price file if available; otherwise use a flat price (1000 NOK/MWh) to get started
 candidate_price_files = [
     os.path.join(path_data_set, 'price_Feb28.csv'),
     os.path.join(path_data_set, 'prices.csv'),
@@ -91,29 +91,29 @@ Price_NOK_per_MWh = None
 for pf in candidate_price_files:
     if os.path.isfile(pf):
         dfp = pd.read_csv(pf)
-        # Gjør et forsiktig forsøk på å hente kolonner "Price" eller lignende
+        # Make a cautious attempt to retrieve columns named "Price" or similar
         cand_cols = [c for c in dfp.columns if 'price' in c.lower()]
         if len(cand_cols) > 0:
             Price_NOK_per_MWh = dfp[cand_cols[0]].to_numpy()[:Base_load_MW.shape[0]]
             break
 
 if Price_NOK_per_MWh is None:
-    # fallback: flat pris
+    # fallback: flat price
     Price_NOK_per_MWh = np.full_like(Base_load_MW, 1000.0, dtype=float)
 
-# Lag ordbøker (Pyomo-vennlig)
+# Create dictionaries (Pyomo-friendly)
 dict_Base_load = dict(zip(Hours, Base_load_MW))
 dict_PV_prod   = dict(zip(Hours, PV_prod_MW))
 dict_Prices    = dict(zip(Hours, Price_NOK_per_MWh))
 
-# ================== KJAPP SJEKK ==================
-print("=== Input til ny modell ===")
+# ================== QUICK CHECK ==================
+print("=== Input for new model ===")
 print(f"Hours: {Hours.shape} -> {Hours[:5]} ...")
 print(f"Base_load_MW: shape {Base_load_MW.shape}, peak={Base_load_MW.max():.3f} MW, mean={Base_load_MW.mean():.3f} MW")
 print(f"PV_prod_MW:   all zeros? {np.allclose(PV_prod_MW, 0.0)}")
 print(f"Price (NOK/MWh): shape {Price_NOK_per_MWh.shape}, first={Price_NOK_per_MWh[0]:.1f}")
 print(f"P_lim_MW = {P_lim_MW:.3f}")
-print("Filer lest OK. Nå kan du plugge dette inn i Pyomo-modellen (MW/MWh-enheter).")
+print("Files read successfully. You can now plug this into the Pyomo model (MW/MWh units).")
 
 
 #%% Read battery specifications
@@ -131,8 +131,8 @@ testData = pd.read_csv('./profile_input.csv')
 
 # Convert the various timeseries/profiles to numpy arrays
 Hours = Hours = np.arange(Base_load_MW.shape[0])
-Base_load = Base_load_MW #skal erstattes med last for 28. februar
-PV_prod = np.zeros_like(Base_load) #testData['PV_prod'].values
+Base_load = Base_load_MW # should be replaced with the load for 28 February
+PV_prod = np.zeros_like(Base_load) # testData['PV_prod'].values
 Price = testData['Price'].values
 
 # Make dictionaries (for simpler use in Pyomo)
@@ -190,7 +190,7 @@ def end_energy_rule(model):
     return model.E[model.T.last()] == 0
 model.end_energy = pyo.Constraint(rule=end_energy_rule)
 
-""" Unødevendig?
+""" Unnecessary?
 def max_discharge_rule(model, t):
     return model.P_d[t] <= model.E[t]*model.eta_d #Multiply with efficiency?
 model.max_discharge = pyo.Constraint(model.T, rule=max_discharge_rule) 
@@ -242,6 +242,7 @@ df = pd.DataFrame({
 total_cost = (df['price'] * (df['P_from_grid'] - df['P_to_grid'])).sum()
 
 print(f"Total cost for the day: {total_cost:.2f} (same currency/unit as 'Price')")
+
 
 # --- PLOT: charge/discharge schedule + SoC ----------------------------------
 plt.figure(figsize=(10,4.2))
@@ -335,3 +336,53 @@ print(f"Peak export: {peak_export:.2f} kW at hour {int(t_peak_export)}")
 print(f"Energy imported (24h): {energy_import:.2f} kWh")
 print(f"Energy exported (24h): {energy_export:.2f} kWh")
 
+# --- PLOT: Load with/without flexibility + SOC (dual axes, MW/MWh) ---
+def plot_flex(hours, load_wo, load_w, soc, p_limit=4.0, title="Load with and without flexibility"):
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    hours = np.asarray(hours)
+    load_wo = np.asarray(load_wo, dtype=float)
+    load_w  = np.asarray(load_w, dtype=float)
+    soc     = np.asarray(soc, dtype=float)
+
+    fig, ax1 = plt.subplots(figsize=(10,5))
+
+    # Left axis: loads (MW)
+    ax1.plot(hours, load_wo, label='Load Without Flex')
+    ax1.plot(hours, load_w,  label='Load With Flex')
+    ax1.axhline(p_limit, linestyle=':', label=f'Congestion threshold ({p_limit:.0f} MW)')
+    ax1.set_xlabel('Hour')
+    ax1.set_ylabel('MW')
+    ax1.set_title(title)
+    ax1.grid(True, alpha=0.3)
+
+    # Right axis: SOC (MWh)
+    ax2 = ax1.twinx()
+    ax2.plot(hours, soc, label='SOC (right)', color='tab:red', linestyle='--')
+    ax2.set_ylabel('MWh')
+
+    # Combined legend
+    L1, lab1 = ax1.get_legend_handles_labels()
+    L2, lab2 = ax2.get_legend_handles_labels()
+    ax1.legend(L1 + L2, lab1 + lab2, loc='upper left')
+
+    plt.tight_layout()
+    plt.show()
+
+# Hours for x-axis
+hrs = df['hour'].values
+
+# Load without flexibility (area base load in MW)
+load_without_flex = df['base_load'].values
+
+# Load with flexibility = net import the upstream grid sees (MW)
+# You already computed this:
+load_with_flex = df['net_load_grid'].values
+
+# State of charge (MWh)
+soc = df['E'].values
+
+# Plot
+plot_flex(hrs, load_without_flex, load_with_flex, soc, p_limit=4.0,
+          title="Load with and without flexibility (BESS 1 MW / 2 MWh)")

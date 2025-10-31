@@ -230,45 +230,45 @@ print(f"Corrected PV (PV_inv - PV_res): {PV_corrected:,.0f} NOK")
 
 #TASK 7
 
-# ===== TASK 7 (enkel versjon) =====
-# Forutsetninger
+# ===== TASK 7 (simple version) =====
+# Assumptions
 cost_per_mwh = 2000.0     # NOK/MWh
-days_per_year = 20        # antall "like" dager i året
-P_limit = 4.0             # MW (nettets grense)
-P_bess = 1.0              # MW (maks timesvis lastforskyvning fra batteriet)
-growth = 0.03             # årlig vekst
-planning_horizon = y_end  # f.eks. 20 år, gjenbruker variabel fra tidligere
+days_per_year = 20        # number of similar days in the year
+P_limit = 4.0             # MW (grid limit)
+P_bess = 1.0              # MW (maximum hourly load shifting from the battery)
+growth = 0.03             # annual growth
+planning_horizon = y_end  # e.g., 20 years, reusing the variable from earlier
 
-# 1) Finn når representativ topp (denne dagen) først går over 5 MW
-P_max_base = float(load_time_series_subset_aggr.max())      # MW på representativ dag (år 1)
+# 1) Find when the representative peak (this day) first exceeds 5 MW
+P_max_base = float(load_time_series_subset_aggr.max())      # MW on representative day (year 1)
 reinforce_year = None
 for y in range(1, planning_horizon + 1):
     peak_y = P_max_base * ((1 + growth) ** (y - 1))
-    if peak_y > (P_limit + P_bess):   # overskrider 5 MW
-        reinforce_year = y      # forsterker ved starten av neste år
+    if peak_y > (P_limit + P_bess):   # exceeds 5 MW
+        reinforce_year = y      # reinforce at the start of the next year
         break
 
-# 2) Beregn årlige kostnader (0 etter forsterkning)
+# 2) Calculate annual costs (0 after reinforcement)
 annual_costs = {}
 for y in range(1, planning_horizon + 1):
-    # Hvis forsterket før eller ved starten av dette året -> ingen innkjøp
+    # If reinforcement occurs before or at the start of this year -> no purchases
     if (reinforce_year is not None) and (y >= reinforce_year):
         annual_costs[y] = 0.0
         continue
 
-    # Skaler hele døgnprofilen for dette året
+    # Scale the entire daily profile for this year
     growth_factor = (1 + growth) ** (y - 1)
     load_y = load_time_series_subset_aggr * growth_factor  # MW per time
 
-    # Energi som må flyttes: overskudd over 4 MW, avgrenset av 1 MW batteri
+    # Energy that must be shifted: surplus above 4 MW, limited by a 1 MW battery
     excess = np.maximum(load_y - P_limit, 0.0)             # MW per time
     shifted_per_hour = np.minimum(excess, P_bess)          # MW per time (cap 1 MW)
-    E_shift_day = float(shifted_per_hour.sum())            # MWh for hele dagen
+    E_shift_day = float(shifted_per_hour.sum())            # MWh for the entire day
 
-    # Årskostnad = MWh per dag * pris * antall slike dager
+    # Annual cost = MWh per day * price * number of such days
     annual_costs[y] = E_shift_day * cost_per_mwh * days_per_year
 
-# 3) Utskrift (kort og ryddig)
+# 3) Printout (short and tidy)
 print("TASK 7: Yearly operating costs for congestion management (NOK/year)")
 if reinforce_year is None:
     print("- No reinforcement in the horizon; services are purchased every year.")
