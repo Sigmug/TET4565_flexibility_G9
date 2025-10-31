@@ -18,23 +18,121 @@ from pyomo.core import Var
 import pyomo.environ as pyo
 import time
 
+# %% Dependencies
+import os
+import numpy as np
+import pandas as pd
+import load_profiles as lp           # <- følger med oppgavesettet
+import pandapower_read_csv as ppcsv  # <- følger med oppgavesettet
+
+
+path_data_set = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
+
+# Filer i datasettet
+filename_load_data_fullpath    = os.path.join(path_data_set,'load_data_CINELDI_MV_reference_system.csv')
+filename_load_mapping_fullpath = os.path.join(path_data_set,'mapping_loads_to_CINELDI_MV_reference_grid.csv')
+filename_standard_overhead     = os.path.join(path_data_set,'standard_overhead_line_types.csv')
+filename_reldata               = os.path.join(path_data_set,'reldata_for_component_types.csv')
+filename_load_point            = os.path.join(path_data_set,'CINELDI_MV_reference_system_load_point.csv')
+
+# Valg for området og skalering
+bus_i_subset    = [90, 91, 92, 96]
+scaling_factor  = 10          # som i Exercise 4
+annual_growth   = 0.03
+year_index      = 5           # år 6 => y = 5
+scale_y6        = (1 + annual_growth)**year_index
+
+# Nettgrense i MW (brukes senere i modellen)
+P_lim_MW = 4.0
+
+# ================== LES STATISKE TABELLER (valgfritt, brukes i senere tasker) ==================
+data_standard_overhead_lines = pd.read_csv(filename_standard_overhead, delimiter=';').set_index('type')
+data_comp_rel                = pd.read_csv(filename_reldata, delimiter=';').set_index('main_type')
+data_load_point              = pd.read_csv(filename_load_point, delimiter=';').set_index('bus_i')
+
+# ================== LES NETT (pandapower) ==================
+net = ppcsv.read_net_from_csv(path_data_set, baseMVA=10)
+
+# ================== LES OG MAPPE LASTPROFILER ==================
+# 28. februar = dag nr. 59 i året -> 31 (jan) + 28 (feb) = 59 => 0-indeksert timeindeks i filene håndteres av hjelpefunksjonen
+load_profiles = lp.load_profiles(filename_load_data_fullpath)
+
+# Bruk kun 28. feb som representativ dag
+repr_days = [31 + 28]  # [59]
+profiles_mapped = load_profiles.map_rel_load_profiles(filename_load_mapping_fullpath, repr_days)
+# profiles_mapped: rader = døgnets timer (24), kolonner = busser (1-indeksert)
+
+# Skaler med nominell MW for hver last i nettdata + øk med scaling_factor (Exercise 4)
+load_time_series_mapped = profiles_mapped.mul(net.load['p_mw'])    # MW
+load_time_series_subset = load_time_series_mapped[bus_i_subset] * scaling_factor
+
+# Aggregert timeserie (MW) for området
+load_time_series_subset_aggr = load_time_series_subset.sum(axis=1)  # lengde 24
+
+scale_y6 = (1.03**5)
+
+# ================== BYGG INNDATA TIL OPTIMISERING ==================
+# Base_load i MW for år 6 (y=5)
+Base_load_MW = load_time_series_subset_aggr.to_numpy() * scale_y6   # (24,)
+
+# PV-produksjon settes til null (MW)
+PV_prod_MW = np.zeros_like(Base_load_MW)
+
+# Timer 0..23
+Hours = np.arange(Base_load_MW.shape[0])
+
+# ===== PRIS =====
+# Prøv å lese prisfil hvis du har den; ellers bruk flat pris (1000 NOK/MWh) for å komme i gang
+candidate_price_files = [
+    os.path.join(path_data_set, 'price_Feb28.csv'),
+    os.path.join(path_data_set, 'prices.csv'),
+]
+Price_NOK_per_MWh = None
+for pf in candidate_price_files:
+    if os.path.isfile(pf):
+        dfp = pd.read_csv(pf)
+        # Gjør et forsiktig forsøk på å hente kolonner "Price" eller lignende
+        cand_cols = [c for c in dfp.columns if 'price' in c.lower()]
+        if len(cand_cols) > 0:
+            Price_NOK_per_MWh = dfp[cand_cols[0]].to_numpy()[:Base_load_MW.shape[0]]
+            break
+
+if Price_NOK_per_MWh is None:
+    # fallback: flat pris
+    Price_NOK_per_MWh = np.full_like(Base_load_MW, 1000.0, dtype=float)
+
+# Lag ordbøker (Pyomo-vennlig)
+dict_Base_load = dict(zip(Hours, Base_load_MW))
+dict_PV_prod   = dict(zip(Hours, PV_prod_MW))
+dict_Prices    = dict(zip(Hours, Price_NOK_per_MWh))
+
+# ================== KJAPP SJEKK ==================
+print("=== Input til ny modell ===")
+print(f"Hours: {Hours.shape} -> {Hours[:5]} ...")
+print(f"Base_load_MW: shape {Base_load_MW.shape}, peak={Base_load_MW.max():.3f} MW, mean={Base_load_MW.mean():.3f} MW")
+print(f"PV_prod_MW:   all zeros? {np.allclose(PV_prod_MW, 0.0)}")
+print(f"Price (NOK/MWh): shape {Price_NOK_per_MWh.shape}, first={Price_NOK_per_MWh[0]:.1f}")
+print(f"P_lim_MW = {P_lim_MW:.3f}")
+print("Filer lest OK. Nå kan du plugge dette inn i Pyomo-modellen (MW/MWh-enheter).")
+
+
 #%% Read battery specifications
 parametersinput = pd.read_csv('./battery_data.csv', index_col=0)
 parameters = parametersinput.loc[1]
 
 #Parse battery specification
-capacity=parameters['Energy_capacity']
-charging_power_limit=parameters["Power_capacity"]
-discharging_power_limit=parameters["Power_capacity"]
-charging_efficiency=parameters["Charging_efficiency"]
-discharging_efficiency=parameters["Discharging_efficiency"]
+capacity = 2 #parameters['Energy_capacity']
+charging_power_limit = 1 #parameters["Power_capacity"]
+discharging_power_limit = 1 #parameters["Power_capacity"]
+charging_efficiency = parameters["Charging_efficiency"]
+discharging_efficiency = parameters["Discharging_efficiency"]
 #%% Read load demand and PV production profile data
 testData = pd.read_csv('./profile_input.csv')
 
 # Convert the various timeseries/profiles to numpy arrays
-Hours = testData['Hours'].values
-Base_load = testData['Base_load'].values
-PV_prod = testData['PV_prod'].values
+Hours = Hours = np.arange(Base_load_MW.shape[0])
+Base_load = Base_load_MW #skal erstattes med last for 28. februar
+PV_prod = np.zeros_like(Base_load) #testData['PV_prod'].values
 Price = testData['Price'].values
 
 # Make dictionaries (for simpler use in Pyomo)
@@ -42,7 +140,7 @@ dict_Prices = dict(zip(Hours, Price))
 dict_Base_load = dict(zip(Hours, Base_load))
 dict_PV_prod = dict(zip(Hours, PV_prod))
 
-p_limit = 6.05
+p_limit = 4
 # %%
 
 model = pyo.ConcreteModel()
@@ -71,8 +169,9 @@ model.E = pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.cap)) #E
 
 #Objective function: Minimize cost of electricity
 def OBJ(model):
-    return sum(model.Price[t]*(model.P_from_grid[t]-model.P_to_grid[t]) for t in model.T)
-model.OBJ = pyo.Objective(rule=OBJ, sense=pyo.minimize)
+    #return sum(model.Price[t]*(model.P_from_grid[t]-model.P_to_grid[t]) for t in model.T)
+    return sum(model.Price[t]*(model.P_to_grid[t]-model.P_from_grid[t]) for t in model.T)
+model.OBJ = pyo.Objective(rule=OBJ, sense=pyo.maximize)
 
 #Constraints
 
@@ -91,9 +190,11 @@ def end_energy_rule(model):
     return model.E[model.T.last()] == 0
 model.end_energy = pyo.Constraint(rule=end_energy_rule)
 
+""" Unødevendig?
 def max_discharge_rule(model, t):
     return model.P_d[t] <= model.E[t]*model.eta_d #Multiply with efficiency?
 model.max_discharge = pyo.Constraint(model.T, rule=max_discharge_rule) 
+"""
 
 def sell_buy_rule(model, t):
     return model.P_to_grid[t]* model.P_from_grid[t] ==0
@@ -221,14 +322,6 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-import pandas as pd
-import os
-import load_profiles as lp
-import pandapower_read_csv as ppcsv
-import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
-
 # --- Key figures -------------------------------------------------------------
 peak_import = df['net_load_grid'].max()
 t_peak_import = df.loc[df['net_load_grid'].idxmax(), 'hour']
@@ -242,210 +335,3 @@ print(f"Peak export: {peak_export:.2f} kW at hour {int(t_peak_export)}")
 print(f"Energy imported (24h): {energy_import:.2f} kWh")
 print(f"Energy exported (24h): {energy_export:.2f} kWh")
 
-path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
-#path_data_set         = 'C:\\Users\\graff\\OneDrive\\Dokumenter\\CINELDI_MV_reference_system_v_2023-03-06' 
-
-filename_load_data_fullpath = os.path.join(path_data_set,'load_data_CINELDI_MV_reference_system.csv')
-filename_load_mapping_fullpath = os.path.join(path_data_set,'mapping_loads_to_CINELDI_MV_reference_grid.csv')
-filename_standard_overhead_lines = os.path.join(path_data_set,'standard_overhead_line_types.csv')
-filename_reldata = os.path.join(path_data_set,'reldata_for_component_types.csv')
-filename_load_point = os.path.join(path_data_set,'CINELDI_MV_reference_system_load_point.csv')
-
-# Subset of load buses to consider in the grid area, considering the area at the end of the main radial in the grid
-bus_i_subset = [90, 91, 92, 96]
-
-# Assumed power flow limit in MW that limit the load demand in the grid area (through line 85-86)
-P_lim = 4
-
-# Factor to scale the loads for this exercise compared with the base version of the CINELDI reference system data set
-scaling_factor = 10
-
-# Read standard data for overhead lines
-data_standard_overhead_lines = pd.read_csv(filename_standard_overhead_lines, delimiter=';')
-data_standard_overhead_lines.set_index(keys = 'type', drop = True, inplace = True)
-
-# Read standard component reliability data
-data_comp_rel = pd.read_csv(filename_reldata, delimiter=';')
-data_comp_rel.set_index(keys = 'main_type', drop = True, inplace = True)
-
-# Read load point data (incl. specific rates of costs of energy not supplied) for data
-data_load_point = pd.read_csv(filename_load_point, delimiter=';')
-data_load_point.set_index(keys = 'bus_i', drop = True, inplace = True)
-
-
-# %% Read pandapower network
-
-net = ppcsv.read_net_from_csv(path_data_set, baseMVA=10)
-
-
-# %% Set up hourly normalized load time series for a representative day (task 2; this code is provided to the students)
-
-load_profiles = lp.load_profiles(filename_load_data_fullpath)
-
-# Consider only the day with the peak load in the area (28 February)
-repr_days = [31+28]
-
-# Get relative load profiles for representative days mapped to buses of the CINELDI test network;
-# the column index is the bus number (1-indexed) and the row index is the hour of the year (0-indexed)
-profiles_mapped = load_profiles.map_rel_load_profiles(filename_load_mapping_fullpath,repr_days)
-
-# Calculate load time series in units MW (or, equivalently, MWh/h) by scaling the normalized load time series by the
-# maximum load value for each of the load points in the grid data set (in units MW); the column index is the bus number
-# (1-indexed) and the row index is the hour of the year (0-indexed)
-load_time_series_mapped = profiles_mapped.mul(net.load['p_mw'])
-
-# ==== Exercise 4 – Battery operation with import cap (Alt. B) ====
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import pyomo.environ as pyo
-from pyomo.opt import SolverFactory
-
-# ------------------------------------------------------------------
-# 1) DATA
-# ------------------------------------------------------------------
-# -- Prices (reuse your Exercise 3 price vector)
-price_df = pd.read_csv('./profile_input.csv')   # has columns: Hours, Price (and PV/Base from Ex.3)
-Hours = price_df['Hours'].values
-Price = price_df['Price'].values
-
-# -- Aggregated load for 28 February (MW, 24 points)
-# Provide this Series from your earlier code; here we assume you have it in memory:
-#   load_time_series_subset_aggr: pandas Series (24 values) in MW for 28 Feb
-# If you don't have it here, you can also save it to CSV in the other script and read it back.
-load_time_series_subset = load_time_series_mapped[bus_i_subset] * scaling_factor
-load_time_series_subset_aggr = load_time_series_subset.sum(axis=1)
-
-P_max = load_time_series_subset_aggr.max()
-
-# Scale load to year 6 (starting at y=5) with 3% growth
-growth = 0.03
-scale_to_year6 = (1 + growth) ** 5
-load_mw_y6 = load_time_series_subset_aggr.values * scale_to_year6           # MW
-Base_load = (load_mw_y6 * 1000.0)                                           # kW
-
-# -- PV is zero
-PV_prod = np.zeros_like(Base_load)
-
-# ------------------------------------------------------------------
-# 2) BATTERY + LIMITS
-# ------------------------------------------------------------------
-# Battery: 1 MW / 2 MWh
-P_batt_kw = 1000.0
-E_batt_kwh = 2000.0
-eta_c = 1.0       # set efficiencies = 1.0 unless you want specific values
-eta_d = 1.0
-
-# Net import limit: 4 MW -> 4000 kW
-P_lim_kw = 4000.0
-
-# ------------------------------------------------------------------
-# 3) MODEL
-# ------------------------------------------------------------------
-model = pyo.ConcreteModel()
-model.T = pyo.Set(initialize=range(len(Hours)), ordered=True)
-
-# Params
-model.Price   = pyo.Param(model.T, initialize=dict(enumerate(Price)), within=pyo.Reals)
-model.Base    = pyo.Param(model.T, initialize=dict(enumerate(Base_load)), within=pyo.Reals)
-model.PV      = pyo.Param(model.T, initialize=dict(enumerate(PV_prod)), within=pyo.Reals)
-model.cap     = pyo.Param(initialize=E_batt_kwh)      # kWh
-model.eta_c   = pyo.Param(initialize=eta_c)
-model.eta_d   = pyo.Param(initialize=eta_d)
-model.Pc_max  = pyo.Param(initialize=P_batt_kw)       # kW
-model.Pd_max  = pyo.Param(initialize=P_batt_kw)       # kW
-model.P_lim   = pyo.Param(initialize=P_lim_kw)        # kW
-
-# Vars
-model.P_c = pyo.Var(model.T, bounds=(0, model.Pc_max))            # kW
-model.P_d = pyo.Var(model.T, bounds=(0, model.Pd_max))            # kW
-model.P_from = pyo.Var(model.T, within=pyo.NonNegativeReals)      # kW
-model.P_to   = pyo.Var(model.T, within=pyo.NonNegativeReals)      # kW
-model.E      = pyo.Var(model.T, bounds=(0, model.cap))            # kWh
-
-# Objective: minimize net energy cost (== maximize arbitrage revenue)
-def OBJ(m):
-    return sum(m.Price[t] * (m.P_from[t] - m.P_to[t]) for t in m.T)
-model.OBJ = pyo.Objective(rule=OBJ, sense=pyo.minimize)
-
-# Constraints
-def power_balance(m, t):
-    return m.P_from[t] + m.P_d[t] + m.PV[t] == m.Base[t] + m.P_c[t] + m.P_to[t]
-model.power_balance = pyo.Constraint(model.T, rule=power_balance)
-
-def energy_balance(m, t):
-    if t == m.T.first():
-        return m.E[t] == 0.0
-    return m.E[t] == m.E[t-1] + m.eta_c*m.P_c[t-1] - (1/m.eta_d)*m.P_d[t-1]
-model.energy_balance = pyo.Constraint(model.T, rule=energy_balance)
-
-def end_energy(m):
-    return m.E[m.T.last()] == 0.0
-model.end_energy = pyo.Constraint(rule=end_energy)
-
-# Ensure we don't discharge more than available energy in 1h:
-def max_discharge_energy(m, t):
-    return m.P_d[t] <= m.E[t] * m.eta_d
-model.max_discharge_energy = pyo.Constraint(model.T, rule=max_discharge_energy)
-
-# Net import cap each hour
-def import_cap(m, t):
-    return m.P_from[t] <= m.P_lim
-model.import_cap = pyo.Constraint(model.T, rule=import_cap)
-
-# (Optional) prevent simultaneous buy & sell (bilinear; requires Gurobi with NonConvex=2)
-def no_buy_and_sell(m, t):
-    return m.P_to[t] * m.P_from[t] == 0
-model.no_buy_and_sell = pyo.Constraint(model.T, rule=no_buy_and_sell)
-
-# ------------------------------------------------------------------
-# 4) SOLVE
-# ------------------------------------------------------------------
-opt = SolverFactory('gurobi')
-results = opt.solve(model, tee=False)
-
-# ------------------------------------------------------------------
-# 5) RESULTS
-# ------------------------------------------------------------------
-df = pd.DataFrame({
-    'hour'        : Hours,
-    'price'       : [pyo.value(model.Price[t]) for t in model.T],
-    'base_load'   : [pyo.value(model.Base[t])  for t in model.T],
-    'pv'          : [pyo.value(model.PV[t])    for t in model.T],
-    'P_c'         : [pyo.value(model.P_c[t])   for t in model.T],
-    'P_d'         : [pyo.value(model.P_d[t])   for t in model.T],
-    'P_from_grid' : [pyo.value(model.P_from[t]) for t in model.T],
-    'P_to_grid'   : [pyo.value(model.P_to[t])   for t in model.T],
-    'E'           : [pyo.value(model.E[t])     for t in model.T],
-})
-df['net_import'] = df['P_from_grid'] - df['P_to_grid']   # kW
-
-total_cost = (df['price'] * (df['P_from_grid'] - df['P_to_grid'])).sum()
-print(f"Total arbitrage cost (negative = net revenue): {total_cost:.2f}")
-
-violations = (df['P_from_grid'] > P_lim_kw).sum()
-print(f"Hours violating P_lim=4 MW: {violations} (should be 0 if battery can enforce the cap)")
-
-# ------------------------------------------------------------------
-# 6) PLOTS
-# ------------------------------------------------------------------
-plt.figure(figsize=(10,4))
-plt.plot(df['hour'], df['base_load']/1000, label='Aggregated load (MW)')
-plt.plot(df['hour'], df['net_import']/1000, label='Net import (MW)')
-plt.axhline(P_lim_kw/1000, ls='--', label='P_lim = 4 MW')
-plt.xlabel('Hour')
-plt.ylabel('MW')
-plt.title('Net import vs. 4 MW limit')
-plt.grid(True, alpha=0.3)
-plt.legend(); plt.tight_layout(); plt.show()
-
-plt.figure(figsize=(10,4))
-plt.plot(df['hour'], df['P_c'], label='Charge (kW)')
-plt.plot(df['hour'], df['P_d'], label='Discharge (kW)')
-plt.xlabel('Hour'); plt.ylabel('kW'); plt.title('Charge/Discharge schedule')
-plt.grid(True, alpha=0.3); plt.legend(); plt.tight_layout(); plt.show()
-
-plt.figure(figsize=(10,4))
-plt.plot(df['hour'], df['E'], label='SoC (kWh)')
-plt.xlabel('Hour'); plt.ylabel('kWh'); plt.title('Battery SoC (2 MWh)')
-plt.grid(True, alpha=0.3); plt.legend(); plt.tight_layout(); plt.show()
