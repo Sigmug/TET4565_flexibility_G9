@@ -103,19 +103,9 @@ peak_by_year = pd.Series(
 
 # Find the first year where the peak exceeds the 4 MW limit
 first_violation_year = peak_by_year[peak_by_year > P_limit].index.min()
-
-#print(f"Current peak (year 1): {peak_by_year.iloc[0]:.3f} MW")
-#print(f"Peak in year 2:        {peak_by_year.iloc[1]:.3f} MW")
-#if pd.notna(first_violation_year):
-#    print(f"Constraint (4 MW) is first violated in year {first_violation_year}.")
-#else:
-#    print("Constraint not violated within the chosen horizon.")
-
-# Quick plot
-# Step plot (piecewise-constant by year)
+# Plot
 plt.figure()
 
-# Extend one extra year on x so the last step is visible
 x = np.r_[peak_by_year.index, peak_by_year.index[-1] + 1]
 y = np.r_[peak_by_year.values, peak_by_year.values[-1]]
 
@@ -172,8 +162,6 @@ limit_with_bess = 5.0  # 4 + 1 MW
 
 # smallest y with P_max*(1+g)^y > 5
 y_cross = int(np.ceil(np.log(limit_with_bess / P_max) / np.log(1 + growth)))
-#print(f"First year peak exceeds 5 MW: year {y_cross} -> reinforce at start of year {y_cross+1}")
-# Simple step plot: peak growth, 5 MW effective limit, and congestion year marker
 
 growth = 0.03           # 3% annual growth
 P_limit = 4.0           # MW (original)
@@ -230,7 +218,6 @@ print(f"Corrected PV (PV_inv - PV_res): {PV_corrected:,.0f} NOK")
 
 #TASK 7
 
-# ===== TASK 7 (simple version) =====
 # Assumptions
 cost_per_mwh = 2000.0     # NOK/MWh
 days_per_year = 20        # number of similar days in the year
@@ -239,7 +226,7 @@ P_bess = 1.0              # MW (maximum hourly load shifting from the battery)
 growth = 0.03             # annual growth
 planning_horizon = y_end  # e.g., 20 years, reusing the variable from earlier
 
-# 1) Find when the representative peak (this day) first exceeds 5 MW
+
 P_max_base = float(load_time_series_subset_aggr.max())      # MW on representative day (year 1)
 reinforce_year = None
 for y in range(1, planning_horizon + 1):
@@ -248,27 +235,21 @@ for y in range(1, planning_horizon + 1):
         reinforce_year = y      # reinforce at the start of the next year
         break
 
-# 2) Calculate annual costs (0 after reinforcement)
 annual_costs = {}
 for y in range(1, planning_horizon + 1):
-    # If reinforcement occurs before or at the start of this year -> no purchases
     if (reinforce_year is not None) and (y >= reinforce_year):
         annual_costs[y] = 0.0
         continue
 
-    # Scale the entire daily profile for this year
     growth_factor = (1 + growth) ** (y - 1)
     load_y = load_time_series_subset_aggr * growth_factor  # MW per time
 
-    # Energy that must be shifted: surplus above 4 MW, limited by a 1 MW battery
     excess = np.maximum(load_y - P_limit, 0.0)             # MW per time
     shifted_per_hour = np.minimum(excess, P_bess)          # MW per time (cap 1 MW)
     E_shift_day = float(shifted_per_hour.sum())            # MWh for the entire day
 
-    # Annual cost = MWh per day * price * number of such days
     annual_costs[y] = E_shift_day * cost_per_mwh * days_per_year
 
-# 3) Printout (short and tidy)
 print("TASK 7: Yearly operating costs for congestion management (NOK/year)")
 if reinforce_year is None:
     print("- No reinforcement in the horizon; services are purchased every year.")
@@ -281,22 +262,16 @@ for y in range(1, reinforce_year + 1):
 
 #Task 8
 
-# ==== EENS for Alternative A ====
-
-# Inputs you already have
 length_km      = 20.0      # main feeder length
 P_avg_year1    = 1.841     # MW (average load in year 1)
 growth         = 0.03      # 3% annual growth
 planning_horizon = 10   # e.g., 20
 
-# --- Fill these two from your reliability table (permanent faults only) ---
 lambda_perm_per_km_year = 0.0397  # <-- set: faults per km per year (e.g., 0.05)
 repair_time_hours       = 3  # <-- set: hours per fault (e.g., 8.0)
 
-# Expected number of permanent faults per year on the main feeder
 faults_per_year = lambda_perm_per_km_year * length_km
 
-# EENS per year
 print("\nTASK 8: Expected Energy Not Supplied (EENS) per year (MWh)")
 eens = []
 for y in range(1, planning_horizon + 1):
@@ -307,8 +282,6 @@ for y in range(1, planning_horizon + 1):
 
 print(data_load_point.columns)
 # Task 9
-# ==== TASK: Annual CENS for Alternative A (simple) ====
-# === Task 9: Annual CENS for Alternative A (super simple) ===
 
 # Inputs
 P_avg_year1 = 1.841          # MW (area average in year 1)
@@ -321,17 +294,13 @@ r_hours = 3.0                # hours per permanent fault
 # Faults per year on the 20 km main feeder
 faults_per_year = lambda_perm_100km * (length_km / 100.0)   # = 0.794
 
-# --- Pick the specific cost column CLOSEST to 3h (set the exact name from your DataFrame) ---
-# e.g., if your table has columns like 'spec_cost_1h', 'spec_cost_4h', choose 'spec_cost_4h'
-cost_col = 'c_NOK_per_kWh_4h'    # <-- change to your actual column name
+cost_col = 'c_NOK_per_kWh_4h'
 
-# --- Compute weighted-average specific cost (NOK/kWh) for the area once ---
 base_bus_mw = net.load.loc[bus_i_subset, 'p_mw'] * scaling_factor
 bus_weights = base_bus_mw / base_bus_mw.sum()               # weights sum to 1
 spec_cost_bus = data_load_point.loc[bus_i_subset, cost_col].astype(float)
 avg_spec_cost = float((spec_cost_bus * bus_weights).sum())  # NOK/kWh
 
-# --- Loop years: ENS (MWh) -> CENS (NOK) ---
 for y in range(0, years + 1):
     P_avg_y = P_avg_year1 * ((1 + growth) ** (y))       # MW
     ENS_y_MWh = P_avg_y * r_hours * faults_per_year         # MWh/year
@@ -339,9 +308,7 @@ for y in range(0, years + 1):
     print(f"Year {y:2d}: CENS = {CENS_y_NOK:,.0f} NOK")
 
 # Task 10    
-# === CENS for Alternative B (battery 2 MWh, always full) ===
 
-# Inputs (edit if needed)
 P_avg0 = 1.841            # MW, average load in year 0
 growth = 0.03             # 3% annual growth
 years = 10                # prints Year 0..9
@@ -350,31 +317,25 @@ lambda_perm_100km = 3.97  # permanent faults per 100 km-year (Overhead line 1–
 r_hours = 3.0             # hours per fault
 E_B = 2.0                 # MWh, battery energy per outage (usable)
 
-# Faults per year for the 20 km feeder
 faults_per_year = lambda_perm_100km * (length_km / 100.0)   # = 0.794
 
-# ---- Pick specific cost column (closest to 3 h). Set the actual column name here:
-# e.g., 'spec_cost_4h' (NOK/kWh). If unsure, print(data_load_point.columns) and choose.
-cost_col = 'c_NOK_per_kWh_4h'  # <-- change to your actual column name
 
-# Weighted-average specific interruption cost for the area (NOK/kWh)
+cost_col = 'c_NOK_per_kWh_4h'  
+
+
 base_bus_mw = net.load.loc[bus_i_subset, 'p_mw'] * scaling_factor
 weights = base_bus_mw / base_bus_mw.sum()
 spec_cost_bus = data_load_point.loc[bus_i_subset, cost_col].astype(float)
 avg_spec_cost = float((spec_cost_bus * weights).sum())  # NOK/kWh
 
-# Constant cost reduction per year due to the battery (same each year)
-# ΔCENS = (faults_per_year * E_B [MWh/outage] * 1000 kWh/MWh) * avg_spec_cost
 delta_cens = faults_per_year * E_B * 1000.0 * avg_spec_cost
 
-# Print results
 print(f"Using specific cost column: {cost_col}")
 print(f"faults/year = {faults_per_year:.3f}, outage duration = {r_hours:.1f} h, battery = {E_B:.1f} MWh")
 print(f"Constant annual reduction from battery: {delta_cens:,.0f} NOK\n")
 
 for y in range(years):
     P_avg_y = P_avg0 * ((1 + growth) ** y)                 # MW
-    # EENS with battery: λ * max(P*r - E_B, 0) [MWh/yr]
     eens_B_MWh = faults_per_year * max(P_avg_y * r_hours - E_B, 0.0)
     cens_B_NOK = eens_B_MWh * 1000.0 * avg_spec_cost
     print(f"Year {y:2d}: CENS(B) = {cens_B_NOK:,.0f} NOK")
