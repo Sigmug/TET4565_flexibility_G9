@@ -93,7 +93,6 @@ lowest_voltage = min(voltage_profile)
 lowest_voltage_bus = voltage_profile.idxmin()
 print('The lowest voltage is ', lowest_voltage, ' p.u at bus ', lowest_voltage_bus)
 
-
 #Task 2: Find how much the voltages decrease as the load demand in the area increases           
 
 load_demand = net.load.loc[net.load['bus'].isin(bus_i_subset), 'p_mw'].values
