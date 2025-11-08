@@ -28,8 +28,8 @@ import seaborn as sns
 # Location of (processed) data set for CINELDI MV reference system
 # (to be replaced by your own local data folder)
 
-path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
-#path_data_set         = 'C:\\Users\\graff\\OneDrive\\Dokumenter\\CINELDI_MV_reference_system_v_2023-03-06' 
+#path_data_set         = '/Users/sannespakmo/Library/CloudStorage/OneDrive-Personal/Skole/9. semester/Fordypningsemne/Flexibility/Exercises/7703070'
+path_data_set         = 'C:\\Users\\graff\\OneDrive\\Dokumenter\\CINELDI_MV_reference_system_v_2023-03-06' 
 
 filename_load_data_fullpath = os.path.join(path_data_set,'load_data_CINELDI_MV_reference_system.csv')
 filename_load_mapping_fullpath = os.path.join(path_data_set,'mapping_loads_to_CINELDI_MV_reference_grid.csv')
@@ -118,7 +118,7 @@ plt.ylabel('MW')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
-#plt.show()
+plt.show()
 
 #TASK 3
 
@@ -192,7 +192,7 @@ plt.ylabel('Peak load [MW]')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
-#plt.show()
+plt.show()
 
 capex = 759_408 * 20.0     # 15,188,160 NOK
 r = 0.04
@@ -339,3 +339,15 @@ for y in range(years):
     eens_B_MWh = faults_per_year * max(P_avg_y * r_hours - E_B, 0.0)
     cens_B_NOK = eens_B_MWh * 1000.0 * avg_spec_cost
     print(f"Year {y:2d}: CENS(B) = {cens_B_NOK:,.0f} NOK")
+
+#task 12 - Socio-economic cost for solution A
+
+#socialeco_cost_A = PV_corrected + sum(CENS_y_NOK) må bare finne riktige variabler navn sanne har brukt
+
+#print("task 12: Socio-economic cost for solution A:", socialeco_cost_A, "NOK")
+
+
+#task 13 - Socio-economic cost for solution B
+
+#socialeco_cost_B = c_inv_pv + sum(cens_B_NOK) samme her^
+#print("task 13: Socio-economic cost for solution B:", socialeco_cost_B, "NOK")
