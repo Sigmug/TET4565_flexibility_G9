@@ -63,8 +63,8 @@ model.P_d_max = pyo.Param(initialize=discharging_power_limit)
 model.p_lim = pyo.Param(initialize = p_limit)   
 
 #Variables
-model.P_c =pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.P_c_max)) #Charging power
-model.P_d =pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.P_d_max)) #Discharging power
+model.P_c = pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.P_c_max)) #Charging power
+model.P_d = pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.P_d_max)) #Discharging power
 model.P_from_grid = pyo.Var(model.T, within=pyo.NonNegativeReals) #Power bought from grid
 model.P_to_grid = pyo.Var(model.T, within=pyo.NonNegativeReals) #Power sold to grid
 model.E = pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.cap)) #Energy stored in battery 
@@ -84,7 +84,7 @@ def energy_balance_rule(model, t):
     if t == model.T.first():
         return model.E[t] == 0 #battery state of charge zero at the beginning and the end of the day
     else:
-        return model.E[t] == model.E[t-1] + model.eta_c*model.P_c[t-1] - (1/model.eta_d)*model.P_d[t-1] #t-1 here??
+        return model.E[t] == model.E[t-1] + model.eta_c*model.P_c[t-1] - (1/model.eta_d)*model.P_d[t-1]
 model.energy_balance = pyo.Constraint(model.T, rule=energy_balance_rule)
 
 def end_energy_rule(model):
@@ -92,7 +92,7 @@ def end_energy_rule(model):
 model.end_energy = pyo.Constraint(rule=end_energy_rule)
 
 def max_discharge_rule(model, t):
-    return model.P_d[t] <= model.E[t]*model.eta_d #Multiply with efficiency?
+    return model.P_d[t] <= model.E[t]*model.eta_d 
 model.max_discharge = pyo.Constraint(model.T, rule=max_discharge_rule) 
 
 def sell_buy_rule(model, t):

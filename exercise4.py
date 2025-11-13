@@ -281,6 +281,7 @@ for y in range(1, planning_horizon + 1):
     print(f"Year {y:2d}: EENS = {EENS_y:.2f} MWh")
 
 print(data_load_point.columns)
+
 # Task 9
 
 # Inputs

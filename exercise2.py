@@ -24,6 +24,7 @@ import matplotlib as mpl
 import numpy as np
 
 
+
 # %% Define input data
 
 # Location of (processed) data set for CINELDI MV reference system
@@ -244,7 +245,6 @@ print('The number of hours with overloading is ', number_of_h_overloading, 'h')
 
 
 #Task 13
-# --- Q13: LDC comparison for three cases ---
 
 def ldc(series):
     """Return load duration curve (descending)."""
@@ -317,12 +317,6 @@ print(df_q13.to_string(index=False))
 
 #Task 14
 
-# --- Q14: utilization time and coincidence factor (cases a–c) ---
-
-import os
-import pandas as pd
-import numpy as np
-
 # Helper metrics
 def utilization_time(series):
     """MWh / MW = hours (hourly resolution)"""
@@ -387,11 +381,7 @@ with open("tables/q14_util_cf.tex", "w") as f:
 
 print("\n[Q14] LaTeX saved to: tables/q14_util_cf.tex")
 
-# --- Q14: Plot utilization time and coincidence factor ---
 
-import os
-import matplotlib.pyplot as plt
-import numpy as np
 
 # Check that df_q14 exists; if not, raise a helpful error
 if 'df_q14' not in globals():
