@@ -167,7 +167,7 @@ model.P_from_grid = pyo.Var(model.T, within=pyo.NonNegativeReals) #Power bought 
 model.P_to_grid = pyo.Var(model.T, within=pyo.NonNegativeReals) #Power sold to grid
 model.E = pyo.Var(model.T, within=pyo.NonNegativeReals, bounds=(0,model.cap)) #Energy stored in battery 
 
-#Objective function: Minimize cost of electricity
+#Objective function
 def OBJ(model):
     #return sum(model.Price[t]*(model.P_from_grid[t]-model.P_to_grid[t]) for t in model.T)
     return sum(model.Price[t]*(model.P_to_grid[t]-model.P_from_grid[t]) for t in model.T)
@@ -189,12 +189,6 @@ model.energy_balance = pyo.Constraint(model.T, rule=energy_balance_rule)
 def end_energy_rule(model):
     return model.E[model.T.last()] == 0
 model.end_energy = pyo.Constraint(rule=end_energy_rule)
-
-""" Unnecessary?
-def max_discharge_rule(model, t):
-    return model.P_d[t] <= model.E[t]*model.eta_d #Multiply with efficiency?
-model.max_discharge = pyo.Constraint(model.T, rule=max_discharge_rule) 
-"""
 
 def sell_buy_rule(model, t):
     return model.P_to_grid[t]* model.P_from_grid[t] ==0
